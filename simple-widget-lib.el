@@ -47,14 +47,43 @@
   "An object that notifies listeners of
 state changes when swli-notify is called on it.")
 
-(defclass swli-element ()
+
+;; Signals
+;; This library uses signals to get rid of observer pattern boilerplate.
+;; Signals work as follows:
+;; 1. Either a slot change or a child object triggers the emission of a signal
+;; 2. The parent object's SWLI-RECEIVE method is called with the signal.
+(cl-defgeneric swli-emit (subject signal)
+  "Emit from the SUBJECT a SIGNAL.")
+
+(cl-defgeneric swli-receive (object signal)
+  "Let this OBJECT receive a SIGNAL.
+If this OBJECT has no defined SWLI-RECEIVE method,
+simply return nil."
+  nil
+  nil)
+
+(defclass swli-signal ()
+  ((sender :initarg :sender
+           :type swli-subject
+           :custom swli-subject
+           :reader swli-sender
+           :documentation "The sender of the signal."))
+  "A signal to be emitted by subjects.")
+
+(cl-defmethod swli-emit ((subject swli-subject) (signal swli-signal))
+  (cl-loop for listener in (swli-listeners subject)
+           do (swli-receive listener signal)))
+
+
+(defclass swli-element (swli-subject)
   ((element-id :initform (gensym)
                :type symbol
                :custom symbol
                :reader swli-element-id
                :documentation "The unique element id.")
    (visible :initarg :visible
-            :initform t
+            :initform nil
             :type boolean
             :custom boolean
             :accessor swli-visible
@@ -88,7 +117,7 @@ state changes when swli-notify is called on it.")
 (cl-defmethod swli-redraw-element :around ((element swli-element))
   (when (swli-visible element) (cl-call-next-method)))
 
-(defclass swli-widget (swli-subject swli-element)
+(defclass swli-widget (swli-element)
   ((widget-position :initform 0
                     :type integer
                     :custom integer
@@ -296,26 +325,6 @@ and INITIALIZER are all documented by SWLI-DEFWIDGET."
                 ,@initializer))
             ,@(swli--redraw-expand prefix name
                                   (append mutable-children state)))))
-
-;; (swli-defwidget fishy-fish fishy-
-;;                 :docstring
-;;                 "A fishy fish in the fishmobile"
-;;                 :shared-children
-;;                 (:name x :initform 0 :documentation "x")
-;;                 :immutable-children
-;;                 (:name y :initform 1 :documentation "y")
-;;                 :mutable-children
-;;                 (:name z :initform 2 :documentation "z")
-;;                 (:name n :initform 3 :documentation "n")
-;;                 :state
-;;                 (:name c :initform 5 :type integer :documentation "x")
-;;                 :render
-;;                 (concat (format "%s%s%s" (fishy-x element)
-;;                                 (fishy-y element)
-;;                                 (fishy-z element)))
-;;                 :initializer
-;;                 (message "hey")
-;;                 (message "heyhey"))
 
 (cl-defmacro swli-defwidget (name prefix &rest rest)
   "Define a widget.
